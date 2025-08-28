@@ -118,6 +118,11 @@ EmuInstance::EmuInstance(int inst) : deleting(false),
 
     doAudioSync = globalCfg.GetBool("AudioSync");
 
+    audioPitchOctaves = 0;
+#ifdef SOUND_TOUCH_ENABLED
+    stPitch = nullptr;
+#endif
+
     mpAudioMode = globalCfg.GetInt("MP.AudioMode");
 
     nds = nullptr;

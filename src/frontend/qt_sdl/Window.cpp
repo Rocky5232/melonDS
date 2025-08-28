@@ -1989,6 +1989,9 @@ void MainWindow::onUpdateAudioSettings()
         emuInstance->nds->SPU.SetDegrade10Bit(emuInstance->nds->ConsoleType == 0);
     else
         emuInstance->nds->SPU.SetDegrade10Bit(bitdepth == 1);
+
+    // Apply pitch change immediately at runtime
+    emuInstance->setAudioPitchOctaves(emuInstance->getLocalConfig().GetInt("Audio.PitchOctaves"));
 }
 
 void MainWindow::onAudioSettingsFinished(int res)
