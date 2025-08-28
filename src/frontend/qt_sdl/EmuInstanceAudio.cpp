@@ -24,6 +24,10 @@
 
 #include "mic_blow.h"
 
+#ifdef SOUND_TOUCH_ENABLED
+#include <soundtouch/SoundTouch.h>
+using soundtouch::SoundTouch;
+#endif
 using namespace melonDS;
 
 
@@ -34,6 +38,7 @@ void EmuInstance::audioInit()
 {
     audioVolume = localCfg.GetInt("Audio.Volume");
     audioDSiVolumeSync = localCfg.GetBool("Audio.DSiVolumeSync");
+    audioPitchOctaves = localCfg.GetInt("Audio.PitchOctaves");
 
     audioMuted = false;
     audioSyncCond = SDL_CreateCond();
@@ -65,6 +70,20 @@ void EmuInstance::audioInit()
 
     audioSampleFrac = 0;
 
+#ifdef SOUND_TOUCH_ENABLED
+    if (!stPitch)
+    {
+        stPitch = new SoundTouch();
+        stPitch->setChannels(2);
+        stPitch->setSampleRate(audioFreq);
+        stPitch->setRate(1.0f);
+        stPitch->setTempo(1.0f);
+        stPitch->setPitchSemiTones((float)(audioPitchOctaves * 12));
+        stPitch->setSetting(SETTING_USE_QUICKSEEK, 1);
+        stPitch->setSetting(SETTING_USE_AA_FILTER, 1);
+    }
+#endif
+
     micStarted = false;
     micDevice = 0;
     micWavBuffer = nullptr;
@@ -81,6 +100,14 @@ void EmuInstance::audioDeInit()
     audioDevice = 0;
     micClose();
     micStarted = false;
+
+#ifdef SOUND_TOUCH_ENABLED
+    if (stPitch)
+    {
+        delete stPitch;
+        stPitch = nullptr;
+    }
+#endif
 
     if (audioSyncCond) SDL_DestroyCond(audioSyncCond);
     audioSyncCond = nullptr;
@@ -208,7 +235,41 @@ void EmuInstance::audioCallback(void* data, Uint8* stream, int len)
         num_in = len_in-margin;
     }
 
-    inst->audioResample(buf_in, num_in, (s16*)stream, len, inst->audioVolume);
+    // Resample SPU output to device rate first
+#ifdef SOUND_TOUCH_ENABLED
+    if (inst->audioPitchOctaves != 0 && inst->stPitch)
+    {
+        std::vector<s16> tmp_out((size_t)len * 2);
+        inst->audioResample(buf_in, num_in, tmp_out.data(), len, inst->audioVolume);
+
+        std::vector<float> fin((size_t)len * 2);
+        for (int i = 0; i < len*2; i++) fin[(size_t)i] = (float)tmp_out[(size_t)i] / 32768.0f;
+
+        // Pitch process
+        SDL_LockMutex(inst->audioSyncLock);
+        inst->stPitch->putSamples(fin.data(), len);
+        std::vector<float> fout((size_t)len * 2);
+        int got = inst->stPitch->receiveSamples(fout.data(), len);
+        SDL_UnlockMutex(inst->audioSyncLock);
+
+        s16* out = (s16*)stream;
+        int outFrames = got;
+        for (int i = 0; i < outFrames*2; i++)
+        {
+            float v = fout[(size_t)i] * 32767.0f;
+            if (v > 32767.0f) v = 32767.0f; else if (v < -32768.0f) v = -32768.0f;
+            out[(size_t)i] = (s16)lroundf(v);
+        }
+        if (outFrames < len)
+        {
+            memset(&out[(size_t)outFrames*2], 0, (size_t)(len - outFrames) * sizeof(s16) * 2);
+        }
+    }
+    else
+#endif
+    {
+        inst->audioResample(buf_in, num_in, (s16*)stream, len, inst->audioVolume);
+    }
 }
 
 
@@ -518,6 +579,8 @@ void EmuInstance::audioUpdateSettings()
         nds->SPU.SetInterpolation(static_cast<AudioInterpolation>(audiointerp));
     }
 
+    setAudioPitchOctaves(localCfg.GetInt("Audio.PitchOctaves"));
+
     setupMicInputData();
     if (micStarted) micOpen();
 }
@@ -532,4 +595,23 @@ void EmuInstance::audioDisable()
 {
     if (audioDevice) SDL_PauseAudioDevice(audioDevice, 1);
     if (micStarted) micClose();
+}
+
+void EmuInstance::setAudioPitchOctaves(int octaves)
+{
+    if (octaves < -4) octaves = -4; else if (octaves > 4) octaves = 4;
+    audioPitchOctaves = octaves;
+#ifdef SOUND_TOUCH_ENABLED
+    if (stPitch)
+    {
+        SDL_LockMutex(audioSyncLock);
+        stPitch->clear();
+        stPitch->setSampleRate(audioFreq);
+        stPitch->setChannels(2);
+        stPitch->setRate(1.0f);
+        stPitch->setTempo(1.0f);
+        stPitch->setPitchSemiTones((float)(audioPitchOctaves * 12));
+        SDL_UnlockMutex(audioSyncLock);
+    }
+#endif
 }

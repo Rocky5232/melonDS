@@ -46,6 +46,7 @@ AudioSettingsDialog::AudioSettingsDialog(QWidget* parent) : QDialog(parent), ui(
     oldInterp = cfg.GetInt("Audio.Interpolation");
     oldBitDepth = cfg.GetInt("Audio.BitDepth");
     oldVolume = instcfg.GetInt("Audio.Volume");
+    int oldPitch = instcfg.GetInt("Audio.PitchOctaves");
     oldDSiSync = instcfg.GetBool("Audio.DSiVolumeSync");
 
     volume = oldVolume;
@@ -66,6 +67,13 @@ AudioSettingsDialog::AudioSettingsDialog(QWidget* parent) : QDialog(parent), ui(
     bool state = ui->slVolume->blockSignals(true);
     ui->slVolume->setValue(oldVolume);
     ui->slVolume->blockSignals(state);
+
+    ui->spPitchOctaves->setValue(oldPitch);
+
+#ifdef SOUND_TOUCH_ENABLED
+#else
+    ui->spPitchOctaves->setEnabled(false);
+#endif
 
     ui->chkSyncDSiVolume->setChecked(oldDSiSync);
 
@@ -162,6 +170,11 @@ void AudioSettingsDialog::on_AudioSettingsDialog_accepted()
     cfg.SetQString("Mic.Device", ui->cbMic->currentText());
     cfg.SetInt("Mic.InputType", grpMicMode->checkedId());
     cfg.SetQString("Mic.WavPath", ui->txtMicWavPath->text());
+
+    auto& instcfg = emuInstance->getLocalConfig();
+    instcfg.SetInt("Audio.PitchOctaves", ui->spPitchOctaves->value());
+
+    emit updateAudioSettings();
 
     Config::Save();
 

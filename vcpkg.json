@@ -20,6 +20,7 @@
 		"libarchive",
 		"zstd",
 		"enet",
+		"soundtouch",
 		{
 			"name": "ecm",
 			"platform": "linux"

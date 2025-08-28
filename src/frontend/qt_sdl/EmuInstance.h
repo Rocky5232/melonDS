@@ -31,6 +31,10 @@
 
 const int kMaxWindows = 4;
 
+#ifdef SOUND_TOUCH_ENABLED
+namespace soundtouch { class SoundTouch; }
+#endif
+
 enum
 {
     HK_Lid = 0,
@@ -225,6 +229,7 @@ private:
     void audioMute();
     void audioSync();
     void audioUpdateSettings();
+    void setAudioPitchOctaves(int octaves);
 
     void micOpen();
     void micClose();
@@ -343,6 +348,10 @@ private:
     //int audioInterp;
     int audioVolume;
     bool audioDSiVolumeSync;
+    int audioPitchOctaves;
+#ifdef SOUND_TOUCH_ENABLED
+    soundtouch::SoundTouch* stPitch;
+#endif
     int micInputType;
     std::string micDeviceName;
     std::string micWavPath;
@@ -376,5 +385,6 @@ private:
     friend class EmuThread;
     friend class MainWindow;
 };
+
 
 #endif //EMUINSTANCE_H
